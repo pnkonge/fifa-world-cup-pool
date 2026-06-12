@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import dayjs from 'dayjs';
 import type {
   Match, MatchResult, PlayerScore, PredictionsData,
 } from '../lib/types';
@@ -72,33 +73,25 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
     });
   }, [matches, stageFilter, groupFilter, timeFilter, resultMap]);
 
+  // Sections = one per match day, chronological — mirrors the Schedule page.
   const sections = useMemo(() => {
-    type Section = { title: string; matches: Match[] };
-    const groups = new Map<string, Section>();
-    const ko: Section = { title: 'Knockouts', matches: [] };
+    type Section = { title: string; date: string; matches: Match[] };
+    const byDate = new Map<string, Section>();
 
     for (const m of filtered) {
-      if (m.stage === 'Group' && m.group) {
-        const key = `Group ${m.group}`;
-        if (!groups.has(key)) groups.set(key, { title: key, matches: [] });
-        groups.get(key)!.matches.push(m);
-      } else {
-        ko.matches.push(m);
+      const key = m.date || 'TBD';
+      if (!byDate.has(key)) {
+        byDate.set(key, { title: key, date: key, matches: [] });
       }
+      byDate.get(key)!.matches.push(m);
     }
     const byKickoff = (a: Match, b: Match) => {
-      const da = `${a.date} ${a.time}`;
-      const db = `${b.date} ${b.time}`;
-      if (da !== db) return da.localeCompare(db);
+      if (a.time !== b.time) return a.time.localeCompare(b.time);
       return a.number - b.number;
     };
-    for (const s of groups.values()) s.matches.sort(byKickoff);
-    ko.matches.sort(byKickoff);
+    for (const s of byDate.values()) s.matches.sort(byKickoff);
 
-    return [
-      ...[...groups.values()].sort((a, b) => a.title.localeCompare(b.title)),
-      ...(ko.matches.length ? [ko] : []),
-    ];
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   }, [filtered]);
 
   const summary = useMemo(() => {
@@ -229,12 +222,21 @@ function Section({
   consensus: Map<number, Map<string, number>>;
   totalPlayers: number;
 }) {
+  const headline = formatDateHeadline(title);
   return (
     <section>
-      <header className="mb-3 border-b-2 border-pitch-950 pb-2">
+      <header className="mb-3 flex items-baseline justify-between border-b-2 border-pitch-950 pb-2">
         <h3 className="font-display text-2xl font-bold tracking-tightest text-pitch-950">
-          {title}
+          {headline.main}
+          {headline.isToday && (
+            <span className="ml-3 inline-block bg-gold-400 px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-pitch-950">
+              Today
+            </span>
+          )}
         </h3>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-pitch-700">
+          {matches.length}
+        </span>
       </header>
       <div className="space-y-3">
         {matches.map((m) => (
@@ -393,6 +395,17 @@ function MatchPicksRow({
       )}
     </article>
   );
+}
+
+
+function formatDateHeadline(date: string): { main: string; isToday: boolean } {
+  if (!date || date === 'TBD') return { main: 'Date TBD', isToday: false };
+  const d = dayjs(date);
+  if (!d.isValid()) return { main: date, isToday: false };
+  return {
+    main: `${d.format('dddd')} · ${d.format('MMMM D')}`,
+    isToday: d.isSame(dayjs(), 'day'),
+  };
 }
 
 /**
