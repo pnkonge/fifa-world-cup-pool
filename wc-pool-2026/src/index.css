@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    font-feature-settings: 'ss01', 'ss02';
+  }
+
+  /* Editorial paper texture — subtle grain via repeating gradient */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.035;
+    background-image:
+      radial-gradient(circle at 1px 1px, #0e1f17 1px, transparent 0);
+    background-size: 3px 3px;
+  }
+
+  #root {
+    @apply relative z-10 min-h-screen;
+  }
+
+  /* Tabular numerals throughout for scoring */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}
