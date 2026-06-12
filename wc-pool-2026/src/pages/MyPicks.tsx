@@ -86,8 +86,14 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
         ko.matches.push(m);
       }
     }
-    for (const s of groups.values()) s.matches.sort((a, b) => a.number - b.number);
-    ko.matches.sort((a, b) => a.number - b.number);
+    const byKickoff = (a: Match, b: Match) => {
+      const da = `${a.date} ${a.time}`;
+      const db = `${b.date} ${b.time}`;
+      if (da !== db) return da.localeCompare(db);
+      return a.number - b.number;
+    };
+    for (const s of groups.values()) s.matches.sort(byKickoff);
+    ko.matches.sort(byKickoff);
 
     return [
       ...[...groups.values()].sort((a, b) => a.title.localeCompare(b.title)),
@@ -103,7 +109,8 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
       if (!pick) continue;
       const r = resultMap.get(m.number);
       if (!r?.played) { pending++; continue; }
-      if (r.outcome && pick.trim().toUpperCase() === r.outcome) correct++;
+      const norm = normalizePick(pick, m);
+      if (r.outcome && norm === r.outcome) correct++;
       else wrong++;
     }
     return { correct, wrong, pending };
@@ -257,7 +264,7 @@ function MatchPicksRow({
   const played = !!result?.played;
   const myPickLabel = pickToLabel(myPick, match);
   const actualOutcome = result?.outcome;
-  const normalizedPick = myPick?.trim().toUpperCase();
+  const normalizedPick = normalizePick(myPick, match);
   const myPickCorrect = played && !!normalizedPick && !!actualOutcome && normalizedPick === actualOutcome;
   const myPickWrong = played && !!normalizedPick && !!actualOutcome && normalizedPick !== actualOutcome;
 
@@ -269,9 +276,17 @@ function MatchPicksRow({
         ? 'border-l-4 border-l-pitch-400 bg-pitch-50/70'
         : 'bg-paper';
 
-  const consensusEntries = consensus
-    ? [...consensus.entries()].sort((a, b) => b[1] - a[1])
-    : [];
+  // Merge consensus entries that normalize to the same outcome (e.g.
+  // "Mexico Win" and "A" are the same pick) so bars don't fragment.
+  const merged = new Map<string, number>();
+  if (consensus) {
+    for (const [pick, count] of consensus) {
+      const norm = normalizePick(pick, match);
+      const key = norm ?? pick.replace(/\s+win$/i, '').trim();
+      merged.set(key, (merged.get(key) ?? 0) + count);
+    }
+  }
+  const consensusEntries = [...merged.entries()].sort((a, b) => b[1] - a[1]);
   const consensusTotal = consensusEntries.reduce((s, [, n]) => s + n, 0);
 
   return (
@@ -343,8 +358,11 @@ function MatchPicksRow({
           </p>
           {consensusEntries.map(([pick, count]) => {
             const pct = consensusTotal > 0 ? Math.round((count / consensusTotal) * 100) : 0;
-            const isMine = pick === myPick;
-            const isWinner = played && pick.trim().toUpperCase() === actualOutcome;
+            const normKey = normalizePick(pick, match) ?? pick;
+            const isMine = normalizedPick != null
+              ? normKey === normalizedPick
+              : pick === myPick;
+            const isWinner = played && !!actualOutcome && normKey === actualOutcome;
             return (
               <div key={pick} className="flex items-center gap-2">
                 <span
@@ -377,11 +395,30 @@ function MatchPicksRow({
   );
 }
 
+/**
+ * Map any pick format to a canonical outcome letter.
+ * Handles: 'A'/'B'/'D' letters, 'Draw', '<Team Name> Win', bare team names.
+ * Returns null if the pick can't be interpreted for this match.
+ */
+function normalizePick(pick: string | undefined, match: Match): 'A' | 'B' | 'D' | null {
+  if (!pick) return null;
+  let p = pick.trim();
+  if (/^[ABD]$/i.test(p)) return p.toUpperCase() as 'A' | 'B' | 'D';
+  if (/^draw$/i.test(p)) return 'D';
+  // Strip a trailing " Win" (the Google Form answer format).
+  p = p.replace(/\s+win$/i, '').trim();
+  if (p.toLowerCase() === match.teamA.trim().toLowerCase()) return 'A';
+  if (p.toLowerCase() === match.teamB.trim().toLowerCase()) return 'B';
+  if (/^draw$/i.test(p)) return 'D';
+  return null;
+}
+
 function pickToLabel(pick: string | undefined, match: Match): string {
   if (!pick) return '—';
-  const p = pick.trim().toUpperCase();
-  if (p === 'A') return match.teamA;
-  if (p === 'B') return match.teamB;
-  if (p === 'D') return 'Draw';
-  return pick;
+  const norm = normalizePick(pick, match);
+  if (norm === 'A') return match.teamA;
+  if (norm === 'B') return match.teamB;
+  if (norm === 'D') return 'Draw';
+  // Unknown format — display cleaned-up raw value.
+  return pick.replace(/\s+win$/i, '').trim();
 }
