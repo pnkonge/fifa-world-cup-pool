@@ -270,13 +270,13 @@ function MatchPicksRow({
   const myPickCorrect = played && !!normalizedPick && !!actualOutcome && normalizedPick === actualOutcome;
   const myPickWrong = played && !!normalizedPick && !!actualOutcome && normalizedPick !== actualOutcome;
 
-  const cardBase = 'border border-pitch-300/60 p-4 transition';
+  const cardBase = 'p-4 transition';
   const cardTint =
     myPickCorrect
-      ? 'border-l-4 border-l-gold-500 bg-gold-50/60'
+      ? 'border border-gold-300 border-l-4 border-l-gold-500 bg-gold-50/60'
       : myPickWrong
-        ? 'border-l-4 border-l-pitch-400 bg-pitch-50/70'
-        : 'bg-paper';
+        ? 'border border-red-200 border-l-4 border-l-red-300 bg-red-50/40'
+        : 'border border-pitch-300/60 bg-paper';
 
   // Merge consensus entries that normalize to the same outcome (e.g.
   // "Mexico Win" and "A" are the same pick) so bars don't fragment.
@@ -309,7 +309,7 @@ function MatchPicksRow({
             </span>
           )}
           {myPickWrong && (
-            <span className="bg-pitch-200 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-pitch-700">
+            <span className="bg-red-100 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest text-red-700">
               ✗ Missed
             </span>
           )}
