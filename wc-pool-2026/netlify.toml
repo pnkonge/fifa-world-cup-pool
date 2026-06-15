@@ -1,7 +1,7 @@
 [build]
   base    = "wc-pool-2026"
   command = "npm run build"
-  publish = "wc-pool-2026/dist"
+  publish = "dist"
 
 [[redirects]]
   from   = "/*"
