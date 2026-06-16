@@ -217,7 +217,7 @@ function ScoringLegend() {
         </div>
         <div>
           <dt className="inline font-semibold">Knockout</dt>
-          <dd className="inline"> · 3 pts per correct winner</dd>
+          <dd className="inline"> · 2 pts per correct team</dd>
         </div>
         <div>
           <dt className="inline font-semibold">Wild card</dt>
