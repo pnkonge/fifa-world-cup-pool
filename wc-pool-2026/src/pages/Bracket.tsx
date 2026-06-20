@@ -215,83 +215,136 @@ function MatchupCard({
   onChoose: (slotId: string, team: string) => void;
 }) {
   const ready = slotIsReady(comp);
+  const aPicked = !!pick && pick === comp?.a;
+  const bPicked = !!pick && pick === comp?.b;
+  const hasPick = aPicked || bPicked;
 
   return (
     <div
       className={[
-        'border bg-paper transition',
+        'overflow-hidden rounded-[2px] border bg-paper transition',
         ready ? 'border-pitch-300' : 'border-pitch-200/50 opacity-50',
       ].join(' ')}
     >
       <TeamButton
         slotId={slotId}
         team={comp?.a ?? null}
-        picked={!!pick && pick === comp?.a}
+        picked={aPicked}
+        otherPicked={hasPick && !aPicked}
         realWinner={realWinner}
         showResults={showResults}
         disabled={!ready}
         onChoose={onChoose}
-        position="top"
       />
       <div className="h-px bg-pitch-200" />
       <TeamButton
         slotId={slotId}
         team={comp?.b ?? null}
-        picked={!!pick && pick === comp?.b}
+        picked={bPicked}
+        otherPicked={hasPick && !bPicked}
         realWinner={realWinner}
         showResults={showResults}
         disabled={!ready}
         onChoose={onChoose}
-        position="bottom"
       />
     </div>
   );
 }
 
 function TeamButton({
-  slotId, team, picked, realWinner, showResults, disabled, onChoose, position,
+  slotId, team, picked, otherPicked, realWinner, showResults, disabled, onChoose,
 }: {
   slotId: string;
   team: string | null;
   picked: boolean;
+  otherPicked: boolean;
   realWinner: string | undefined;
   showResults: boolean;
   disabled: boolean;
   onChoose: (slotId: string, team: string) => void;
-  position: 'top' | 'bottom';
 }) {
   const isRealWinner = showResults && !!realWinner && team === realWinner;
-  const isPickedAndCorrect = showResults && picked && isRealWinner;
-  const isPickedAndWrong = showResults && picked && !!realWinner && team !== realWinner;
+  const correct = showResults && picked && isRealWinner;
+  const wrong = showResults && picked && !!realWinner && team !== realWinner;
+
+  // Build class list across two independent channels:
+  //   selection (gold bar + bold + dim loser) and outcome (bg tint).
+  const classes = [
+    'flex w-full items-center justify-between px-3 py-2 text-left transition',
+    'border-l-[3px]',
+  ];
+
+  // Selection channel — left border.
+  if (picked) classes.push('border-l-gold-600');
+  else classes.push('border-l-transparent');
+
+  // Text weight + dim.
+  if (picked) classes.push('font-semibold');
+  else classes.push('font-medium');
+  if (otherPicked && !showResults) classes.push('text-pitch-400/60');
+
+  // Outcome channel — background + text color (only when showResults).
+  if (correct) {
+    classes.push('bg-green-50 text-green-900');
+  } else if (wrong) {
+    classes.push('bg-red-50 text-red-800 line-through');
+    classes.push('border-l-red-400'); // override gold bar to red for wrong pick
+  } else if (showResults && isRealWinner && !picked) {
+    classes.push('bg-gold-50 text-gold-800'); // actual winner you missed
+  } else if (showResults && otherPicked) {
+    classes.push('text-pitch-400/60'); // unpicked + not winner, scoring on
+  } else if (!picked) {
+    classes.push('text-pitch-950');
+  } else {
+    classes.push('text-pitch-950');
+  }
+
+  // Hover only when actionable.
+  if (!disabled && team && !showResults) classes.push('hover:bg-pitch-50');
+  classes.push(disabled || !team ? 'cursor-not-allowed' : 'cursor-pointer');
 
   return (
     <button
       disabled={disabled || !team}
       onClick={() => team && onChoose(slotId, team)}
-      className={[
-        'flex w-full items-center justify-between px-3 py-2 text-left transition',
-        position === 'top' ? 'rounded-t-[1px]' : 'rounded-b-[1px]',
-        picked && !showResults ? 'bg-pitch-950 text-paper' : '',
-        isPickedAndCorrect ? 'bg-green-500 text-white' : '',
-        isPickedAndWrong ? 'bg-red-50 text-pitch-700 line-through' : '',
-        !picked && !showResults ? 'text-pitch-950 hover:bg-pitch-50' : '',
-        !picked && showResults && isRealWinner ? 'bg-gold-50 text-pitch-950' : '',
-        !picked && showResults && !isRealWinner ? 'text-pitch-600' : '',
-        disabled || !team ? 'cursor-not-allowed' : 'cursor-pointer',
-      ].join(' ')}
+      className={classes.join(' ')}
     >
-      <span className="font-display text-sm font-medium">
-        {team ?? <span className="italic text-pitch-300">—</span>}
+      <span className="font-display text-sm">
+        {team ?? <span className="italic text-pitch-300 no-underline">—</span>}
       </span>
+
+      {/* Right-side tag */}
+      {!showResults && picked && (
+        <CheckIcon className="text-gold-600" />
+      )}
+      {correct && (
+        <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-green-700 no-underline">
+          <CheckIcon className="text-green-700" /> got it
+        </span>
+      )}
+      {wrong && (
+        <span className="font-mono text-[9px] uppercase tracking-widest text-red-700 no-underline">
+          your pick
+        </span>
+      )}
       {showResults && isRealWinner && !picked && (
         <span className="font-mono text-[9px] uppercase tracking-widest text-gold-700">
           won
         </span>
       )}
-      {isPickedAndCorrect && (
-        <span className="font-mono text-[9px] uppercase tracking-widest">✓</span>
-      )}
     </button>
+  );
+}
+
+function CheckIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="3" strokeLinecap="round"
+      strokeLinejoin="round" className={className} aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
   );
 }
 
