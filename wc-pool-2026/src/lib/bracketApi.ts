@@ -1,15 +1,22 @@
 // Client for the BracketApi.gs web app.
 //
 // All calls are text/plain POSTs so the browser doesn't CORS-preflight-block
-// Apps Script. The deployed web app returns JSON. Paste your /exec URL below.
+// Apps Script. The deployed web app returns JSON.
+//
+// The /exec URL comes from an env var so it stays out of the public repo:
+//   - local:   .env (gitignored)  ->  VITE_BRACKET_API_URL=https://script.google.com/.../exec
+//   - Netlify: Site settings ▸ Environment variables ▸ VITE_BRACKET_API_URL
+// Note: VITE_-prefixed vars are still inlined into the shipped browser bundle.
+// This keeps the URL out of source control, not out of the browser — anyone
+// using the site can still read it. That's fine here; the lock protects the
+// post-deadline state and the pool is friendly.
 
 import type { BracketPicks } from './bracket';
 
-// ⚠️ Paste the Web App /exec URL from Deploy ▸ Manage deployments.
-const WEBAPP_URL = '';
+const WEBAPP_URL = (import.meta.env.VITE_BRACKET_API_URL as string | undefined) ?? '';
 
-/** False while WEBAPP_URL is still the placeholder — lets the UI show a local preview. */
-export const API_CONFIGURED = !/XXXX/.test(WEBAPP_URL);
+/** False until the env var is set — lets the UI show a local preview. */
+export const API_CONFIGURED = Boolean(WEBAPP_URL);
 
 type Action = 'validateEmail' | 'getBracket' | 'saveBracket' | 'getAllBrackets' | 'getLockInfo';
 
