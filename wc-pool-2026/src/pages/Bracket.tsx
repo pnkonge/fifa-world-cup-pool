@@ -97,7 +97,7 @@ export function Bracket() {
       structure={structure} resolved={resolved} picks={picks}
       picksMade={picksMade} totalSlots={totalSlots} onChoose={choose}
       lockMs={lockMs} now={now} preview identity={{ email: '', playerName: 'Preview' }}
-      onSignOut={signOut}
+      onSignOut={signOut} onClear={() => setPicks({})}
     /></Shell>;
   }
 
@@ -118,6 +118,7 @@ export function Bracket() {
         structure={structure} resolved={resolved} picks={picks}
         picksMade={picksMade} totalSlots={totalSlots} onChoose={choose}
         lockMs={lockMs} now={now} identity={identity} onSignOut={signOut}
+        onClear={() => setPicks({})}
       />
     </Shell>
   );
@@ -210,7 +211,7 @@ function Gate({ onIdentified }: { onIdentified: (id: Identity) => void }) {
 
 function Editor({
   structure, resolved, picks, picksMade, totalSlots, onChoose,
-  lockMs, now, identity, onSignOut, preview = false,
+  lockMs, now, identity, onSignOut, onClear, preview = false,
 }: {
   structure: BracketStructure;
   resolved: Map<string, { a: string | null; b: string | null }>;
@@ -222,10 +223,12 @@ function Editor({
   now: number;
   identity: Identity;
   onSignOut: () => void;
+  onClear: () => void;
   preview?: boolean;
 }) {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMsg, setSaveMsg] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
   const complete = picksMade === totalSlots;
   const remaining = totalSlots - picksMade;
 
@@ -284,6 +287,33 @@ function Editor({
           <span className="font-mono text-[10px] uppercase tracking-widest text-pitch-700">
             <span className={complete ? 'text-pitch-950' : ''}>{picksMade}</span> / {totalSlots} picked
           </span>
+
+          {confirmClear ? (
+            <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-pitch-700">
+              Clear all?
+              <button
+                onClick={() => { onClear(); setConfirmClear(false); setSaveState('idle'); setSaveMsg(''); }}
+                className="border border-red-300 px-2 py-1.5 text-red-700 transition hover:border-red-500 hover:bg-red-50"
+              >
+                yes, clear
+              </button>
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="border border-pitch-300 px-2 py-1.5 transition hover:border-pitch-950 hover:text-pitch-950"
+              >
+                keep
+              </button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setConfirmClear(true)}
+              disabled={preview || picksMade === 0}
+              className="border border-pitch-300 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-pitch-700 transition hover:border-pitch-950 hover:text-pitch-950 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear picks
+            </button>
+          )}
+
           <button
             onClick={save}
             disabled={preview || saveState === 'saving' || picksMade === 0}
