@@ -9,9 +9,10 @@ import { bracketApi, API_CONFIGURED } from '../lib/bracketApi';
 // Column order left→right. 3rd place sits beside the Final.
 const COLUMN_STAGES: KnockoutStage[] = ['R32', 'R16', 'QF', 'SF', 'Final'];
 
-// Mirrors LOCK_MS in BracketApi.gs. Used only until getLockInfo answers; the
-// server time is authoritative. Keep these two in sync.
-const LOCK_FALLBACK_MS = Date.UTC(2026, 5, 28, 20, 0, 0);
+// Mirrors LOCK_MS in BracketApi.gs (3:00 PM real Eastern clock time on
+// June 28 2026 = 19:00 UTC under EDT). Only used until getLockInfo answers;
+// the server time is authoritative. Keep these two in sync.
+const LOCK_FALLBACK_MS = Date.UTC(2026, 5, 28, 19, 0, 0);
 
 // Remembers the signed-in email across reloads (no password — identity only).
 const EMAIL_KEY = 'wc2026.bracket.email';
@@ -689,11 +690,10 @@ function fmtCountdown(ms: number): string {
   return d > 0 ? `${d}d ${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(h)}:${pad(m)}:${pad(sec)}`;
 }
 
-// Renders the lock moment in Eastern wall-clock, whatever lockMs is set to —
-// so the label is always correct even while the EST/EDT question is open.
+// Renders the lock moment in Toronto wall-clock time (the pool's timezone).
 function lockLabel(ms: number): string {
   return new Date(ms).toLocaleString('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: 'America/Toronto',
     month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   });
 }
