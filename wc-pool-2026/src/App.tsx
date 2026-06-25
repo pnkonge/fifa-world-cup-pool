@@ -7,7 +7,7 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
 import { MyPicks } from './pages/MyPicks';
-import { Placeholder } from './pages/Placeholder';
+import { Bracket } from './pages/Bracket';
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<DataSnapshot | null>(null);
@@ -74,15 +74,7 @@ export default function App() {
             )
           }
         />
-        <Route
-          path="/bracket"
-          element={
-            <Placeholder
-              title="Knockout Bracket"
-              blurb="Visual bracket — read-only in Phase 1A, fully interactive entry coming in Phase 1B."
-            />
-          }
-        />
+        <Route path="/bracket" element={<Bracket />} />
         <Route
           path="/my-picks"
           element={

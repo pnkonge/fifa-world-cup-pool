@@ -171,7 +171,15 @@ function DateSection({
 }
 
 function MatchRow({ match, result }: { match: Match; result?: MatchResult }) {
-  const played = result?.played;
+  // A score is shown only for a real, played match. A match whose teams are
+  // still slot labels ("Group A 2nd") hasn't happened, so never show a score
+  // for it — this guards against phantom results in the upstream data.
+  const showScore =
+    !!result?.played &&
+    result.scoreA != null &&
+    result.scoreB != null &&
+    !isUnresolvedTeam(match.teamA) &&
+    !isUnresolvedTeam(match.teamB);
   return (
     <article className="grid grid-cols-[3.5rem_1fr_auto] items-baseline gap-x-3 border-b border-pitch-300/30 py-3 sm:gap-x-5">
       <span className="font-mono text-xs tabular text-pitch-700">
@@ -194,12 +202,12 @@ function MatchRow({ match, result }: { match: Match; result?: MatchResult }) {
       <span
         className={[
           'whitespace-nowrap font-mono text-base tabular sm:text-lg',
-          played
+          showScore
             ? 'font-semibold text-pitch-950'
             : 'text-pitch-300',
         ].join(' ')}
       >
-        {played ? `${result.scoreA}–${result.scoreB}` : '—'}
+        {showScore ? `${result!.scoreA}–${result!.scoreB}` : '—'}
       </span>
     </article>
   );
@@ -234,4 +242,15 @@ function stageLabel(stage: string): string {
     case 'Final': return 'Final';
     default: return stage;
   }
+}
+
+/**
+ * True if a "team" is still an unresolved slot label rather than a real team —
+ * e.g. "Group A 2nd", "Match 73 winner", "M101 loser", "TBD". Requires a digit
+ * before the ordinal so real countries (Netherlands, England, Jordan) are safe.
+ */
+function isUnresolvedTeam(name: string): boolean {
+  return /\b(winner|loser|tbd)\b/i.test(name)
+      || /\d(?:st|nd|rd|th)\b/i.test(name)
+      || /^M\d+\b/i.test(name);
 }
