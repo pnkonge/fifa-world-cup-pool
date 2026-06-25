@@ -7,6 +7,14 @@
 //   - 2 pts flat per correct pick at every stage. Max knockout = 64.
 //   - A later-round pick only scores if that team actually reached that
 //     round in real life AND the player had them advancing.
+//
+// ONE ROUND OF LOOKAHEAD: a slot can be picked with only ONE competitor
+// known (the other still TBD) at R32 and R16 only — e.g. a real seed
+// hasn't arrived yet, or the sibling match hasn't been picked yet. This
+// lets a player lock in a team one round ahead of full certainty. It is
+// capped at exactly one round: a pick made on a still-partial R16 slot
+// never forwards into QF, so QF/SF/3rd/Final always require both real
+// competitors to be genuinely resolved, exactly as before.
 
 export type KnockoutStage = 'R32' | 'R16' | 'QF' | 'SF' | '3rd' | 'Final';
 
@@ -54,6 +62,14 @@ export type BracketResults = Record<string, string>;
 // two competitors. Winner of a feeding slot becomes a competitor here.
 // ─────────────────────────────────────────────────────────────────────
 
+/** A slot's resolved competitors, plus whether it can currently be picked. */
+export interface ResolvedSlot {
+  a: string | null;
+  b: string | null;
+  /** Can the player pick a winner here right now? See file header re: lookahead. */
+  pickable: boolean;
+}
+
 /**
  * Resolve the competitors (seedA/seedB) for every slot based on `picks`.
  * R32 slots use their fixed seeds; later slots inherit the picked winner
@@ -63,8 +79,8 @@ export type BracketResults = Record<string, string>;
 export function cascade(
   structure: BracketStructure,
   picks: BracketPicks,
-): Map<string, { a: string | null; b: string | null }> {
-  const resolved = new Map<string, { a: string | null; b: string | null }>();
+): Map<string, ResolvedSlot> {
+  const resolved = new Map<string, ResolvedSlot>();
 
   // Process in stage order so feeders resolve before dependents.
   for (const stage of STAGE_ORDER) {
@@ -72,38 +88,62 @@ export function cascade(
       if (slot.stage !== stage) continue;
 
       if (slot.stage === 'R32') {
-        resolved.set(slot.id, { a: slot.seedA, b: slot.seedB });
+        const { seedA: a, seedB: b } = slot;
+        resolved.set(slot.id, { a, b, pickable: !!a || !!b });
         continue;
       }
 
       if (slot.stage === '3rd') {
         // Fed by the LOSERS of the two SF slots.
         const [sfA, sfB] = slot.feedsFrom;
-        const a = sfA ? loserOf(sfA, picks, resolved) : null;
-        const b = sfB ? loserOf(sfB, picks, resolved) : null;
-        resolved.set(slot.id, { a, b });
+        const a = sfA ? loserOf(sfA, structure, picks, resolved) : null;
+        const b = sfB ? loserOf(sfB, structure, picks, resolved) : null;
+        resolved.set(slot.id, { a, b, pickable: !!a && !!b });
         continue;
       }
 
       // Normal advancement: winner (picked team) of each feeder.
       const [fA, fB] = slot.feedsFrom;
-      const a = fA ? picks[fA] ?? null : null;
-      const b = fB ? picks[fB] ?? null : null;
-      resolved.set(slot.id, { a, b });
+      const a = fA ? forwardedWinner(fA, structure, picks, resolved) : null;
+      const b = fB ? forwardedWinner(fB, structure, picks, resolved) : null;
+      // R16 gets the one-round lookahead exception; later stages stay strict.
+      const pickable = slot.stage === 'R16' ? (!!a || !!b) : (!!a && !!b);
+      resolved.set(slot.id, { a, b, pickable });
     }
   }
 
   return resolved;
 }
 
+/**
+ * The team the player picked to win `feederId`, but only if that pick is
+ * "grounded" — the feeder is R32 (the bracket's root, always safe to
+ * forward) or the feeder itself had both competitors known. A pick made on
+ * a still-partial slot (the lookahead exception) is NOT forwarded, which is
+ * what caps the exception at exactly one round.
+ */
+function forwardedWinner(
+  feederId: string,
+  structure: BracketStructure,
+  picks: BracketPicks,
+  resolved: Map<string, ResolvedSlot>,
+): string | null {
+  const feederSlot = structure.byId.get(feederId);
+  const feederComp = resolved.get(feederId);
+  if (!feederSlot || !feederComp) return null;
+  const grounded = feederSlot.stage === 'R32' || (!!feederComp.a && !!feederComp.b);
+  return grounded ? picks[feederId] ?? null : null;
+}
+
 /** The team in `feederId` that the player did NOT pick (the loser). */
 function loserOf(
   feederId: string,
+  structure: BracketStructure,
   picks: BracketPicks,
-  resolved: Map<string, { a: string | null; b: string | null }>,
+  resolved: Map<string, ResolvedSlot>,
 ): string | null {
   const comp = resolved.get(feederId);
-  const winner = picks[feederId];
+  const winner = forwardedWinner(feederId, structure, picks, resolved);
   if (!comp || !winner) return null;
   if (comp.a === winner) return comp.b;
   if (comp.b === winner) return comp.a;
@@ -112,7 +152,8 @@ function loserOf(
 
 /**
  * Is a pick for `slotId` currently valid? (Both competitors known and the
- * picked team is actually one of them.) Used to grey out un-pickable slots.
+ * picked team is actually one of them.) Kept for callers that need "fully
+ * decided" specifically; UI gating uses `ResolvedSlot.pickable` instead.
  */
 export function slotIsReady(
   comp: { a: string | null; b: string | null } | undefined,
