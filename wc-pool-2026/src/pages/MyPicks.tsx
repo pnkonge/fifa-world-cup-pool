@@ -66,8 +66,9 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
       if (groupFilter !== 'all' && m.group !== groupFilter) return false;
       if (timeFilter !== 'all') {
         const r = resultMap.get(m.number);
-        if (timeFilter === 'played' && !r?.played) return false;
-        if (timeFilter === 'upcoming' && r?.played) return false;
+        const rp = !!r?.played && !isUnresolvedTeam(m.teamA) && !isUnresolvedTeam(m.teamB);
+        if (timeFilter === 'played' && !rp) return false;
+        if (timeFilter === 'upcoming' && rp) return false;
       }
       return true;
     });
@@ -101,7 +102,7 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
       const pick = playerPicks.picks.get(m.number);
       if (!pick) continue;
       const r = resultMap.get(m.number);
-      if (!r?.played) { pending++; continue; }
+      if (!r?.played || isUnresolvedTeam(m.teamA) || isUnresolvedTeam(m.teamB)) { pending++; continue; }
       const norm = normalizePick(pick, m);
       if (r.outcome && norm === r.outcome) correct++;
       else wrong++;
@@ -263,7 +264,10 @@ function MatchPicksRow({
   consensus?: Map<string, number>;
   totalPlayers: number;
 }) {
-  const played = !!result?.played;
+  const played = !!result?.played
+    && !isUnresolvedTeam(match.teamA)
+    && !isUnresolvedTeam(match.teamB);
+  const showScore = played && result?.scoreA != null && result?.scoreB != null;
   const myPickLabel = pickToLabel(myPick, match);
   const actualOutcome = result?.outcome;
   const normalizedPick = normalizePick(myPick, match);
@@ -316,11 +320,11 @@ function MatchPicksRow({
           <p
             className={[
               'whitespace-nowrap font-mono text-base tabular sm:text-lg',
-              played ? 'font-semibold text-pitch-950' : 'text-pitch-300',
+              showScore ? 'font-semibold text-pitch-950' : 'text-pitch-300',
             ].join(' ')}
           >
-            {played && result.scoreA != null && result.scoreB != null
-              ? `${result.scoreA}–${result.scoreB}`
+            {showScore
+              ? `${result!.scoreA}–${result!.scoreB}`
               : '—'}
           </p>
         </div>
@@ -434,4 +438,15 @@ function pickToLabel(pick: string | undefined, match: Match): string {
   if (norm === 'D') return 'Draw';
   // Unknown format — display cleaned-up raw value.
   return pick.replace(/\s+win$/i, '').trim();
+}
+
+/**
+ * True if a "team" is still an unresolved slot label (e.g. "Group A 2nd",
+ * "Match 73 winner", "TBD") rather than a real team. Requires a digit before
+ * the ordinal so countries like Netherlands/England/Jordan are never flagged.
+ */
+function isUnresolvedTeam(name: string): boolean {
+  return /\b(winner|loser|tbd)\b/i.test(name)
+      || /\d(?:st|nd|rd|th)\b/i.test(name)
+      || /^M\d+\b/i.test(name);
 }

@@ -19,18 +19,37 @@ const EMAIL_KEY = 'wc2026.bracket.email';
 
 type Identity = { email: string; playerName: string };
 
-// STEP 3 SEAM: real teams from Config!J6:J37 will replace the dummy seeds here.
-// Pairings/feedsFrom are identical; only the 32 R32 seed names change.
-function useStructure(): BracketStructure {
-  return useMemo(() => buildDummyBracket(), []);
-}
-
 // STEP 5 SEAM: real knockout results (from the Results tab CSV) populate this.
 // While empty, the reveal shows picks read-only with no scoring tints.
 const REVEAL_RESULTS: BracketResults = {};
 
 export function Bracket() {
-  const structure = useStructure();
+  // Real knockout teams from Config!J6:J37 (via the web app). They come back
+  // blank while the group stage is still running, so the bracket shows TBD
+  // slots until "Update Standings" fills them in (~June 27).
+  const [teams, setTeams] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!API_CONFIGURED) { setTeams(null); return; } // preview uses sample teams
+    bracketApi.getTeams()
+      .then((r) => setTeams(r.ok ? r.teams : []))
+      .catch(() => setTeams([]));
+  }, []);
+  const teamsReady = !!teams && teams.some((t) => !!t && !!t.trim());
+
+  const structure: BracketStructure = useMemo(() => {
+    if (!API_CONFIGURED) return buildDummyBracket(); // local preview only
+    // `teams` now arrives already resolved into R32 match order by the backend
+    // (Match 73 A,B, Match 74 A,B, …), so seeds[2i]/seeds[2i+1] are match i's
+    // two teams — correct pairings, not raw standings order. Third-place slots
+    // stay blank until narrowed in the schedule sheet.
+    const seeds = Array.from({ length: 32 }, (_, i) => (teams && teams[i] ? teams[i].trim() : ''));
+    const s = buildDummyBracket(seeds);
+    s.slots.forEach((slot) => {
+      if (slot.seedA === '') slot.seedA = null;
+      if (slot.seedB === '') slot.seedB = null;
+    });
+    return s;
+  }, [teams]);
 
   // ── Lock state ───────────────────────────────────────────────────
   const [lockMs, setLockMs] = useState(LOCK_FALLBACK_MS);
@@ -98,7 +117,7 @@ export function Bracket() {
       structure={structure} resolved={resolved} picks={picks}
       picksMade={picksMade} totalSlots={totalSlots} onChoose={choose}
       lockMs={lockMs} now={now} preview identity={{ email: '', playerName: 'Preview' }}
-      onSignOut={signOut} onClear={() => setPicks({})}
+      onSignOut={signOut} onClear={() => setPicks({})} teamsReady
     /></Shell>;
   }
 
@@ -119,7 +138,7 @@ export function Bracket() {
         structure={structure} resolved={resolved} picks={picks}
         picksMade={picksMade} totalSlots={totalSlots} onChoose={choose}
         lockMs={lockMs} now={now} identity={identity} onSignOut={signOut}
-        onClear={() => setPicks({})}
+        onClear={() => setPicks({})} teamsReady={teamsReady}
       />
     </Shell>
   );
@@ -212,7 +231,7 @@ function Gate({ onIdentified }: { onIdentified: (id: Identity) => void }) {
 
 function Editor({
   structure, resolved, picks, picksMade, totalSlots, onChoose,
-  lockMs, now, identity, onSignOut, onClear, preview = false,
+  lockMs, now, identity, onSignOut, onClear, teamsReady, preview = false,
 }: {
   structure: BracketStructure;
   resolved: Map<string, { a: string | null; b: string | null }>;
@@ -225,6 +244,7 @@ function Editor({
   identity: Identity;
   onSignOut: () => void;
   onClear: () => void;
+  teamsReady: boolean;
   preview?: boolean;
 }) {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -342,6 +362,12 @@ function Editor({
             {saveMsg ||
               `You've picked ${picksMade} of ${totalSlots} — ${remaining} to go before you can submit.`}
           </span>
+        </div>
+      )}
+
+      {!teamsReady && (
+        <div className="border border-gold-600/40 bg-gold-50 px-4 py-2 font-mono text-[11px] text-gold-800">
+          Knockout teams aren't set yet — they fill in automatically as the group stage finishes, before picks lock {lockLabel(lockMs)}. The matchups below stay greyed until then.
         </div>
       )}
 

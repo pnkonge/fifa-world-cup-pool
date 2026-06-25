@@ -18,7 +18,7 @@ const WEBAPP_URL = (import.meta.env.VITE_BRACKET_API_URL as string | undefined) 
 /** False until the env var is set — lets the UI show a local preview. */
 export const API_CONFIGURED = Boolean(WEBAPP_URL);
 
-type Action = 'validateEmail' | 'getBracket' | 'saveBracket' | 'getAllBrackets' | 'getLockInfo';
+type Action = 'validateEmail' | 'getBracket' | 'saveBracket' | 'getAllBrackets' | 'getLockInfo' | 'getTeams';
 
 async function call<T>(action: Action, payload: Record<string, unknown> = {}): Promise<T> {
   const res = await fetch(WEBAPP_URL, {
@@ -55,6 +55,13 @@ export interface AllBracketsResult {
   brackets: { playerName: string; picks: BracketPicks }[];
 }
 export interface LockInfo { ok: boolean; lockMs: number; now: number; locked: boolean; }
+export interface TeamsResult {
+  ok: boolean;
+  /** 32 entries in R32 match order (Match 73 A,B …); '' for unresolved sides. */
+  teams: string[];
+  /** How many of the 32 sides are still pending (e.g. third-place slots). */
+  unresolved?: number;
+}
 
 export const bracketApi = {
   validateEmail: (email: string) => call<ValidateResult>('validateEmail', { email }),
@@ -63,4 +70,5 @@ export const bracketApi = {
     call<SaveResult>('saveBracket', { email, picks }),
   getAllBrackets: () => call<AllBracketsResult>('getAllBrackets'),
   getLockInfo: () => call<LockInfo>('getLockInfo'),
+  getTeams: () => call<TeamsResult>('getTeams'),
 };
