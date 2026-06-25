@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  cascade, scoreBracket, slotIsReady, STAGE_ORDER, STAGE_LABEL, maxKnockoutScore,
+  cascade, scoreBracket, STAGE_ORDER, STAGE_LABEL, maxKnockoutScore,
   type BracketPicks, type BracketResults, type BracketStructure, type KnockoutStage,
+  type ResolvedSlot,
 } from '../lib/bracket';
 import { buildDummyBracket } from '../lib/dummyBracket';
 import { bracketApi, API_CONFIGURED } from '../lib/bracketApi';
@@ -234,7 +235,7 @@ function Editor({
   lockMs, now, identity, onSignOut, onClear, teamsReady, preview = false,
 }: {
   structure: BracketStructure;
-  resolved: Map<string, { a: string | null; b: string | null }>;
+  resolved: Map<string, ResolvedSlot>;
   picks: BracketPicks;
   picksMade: number;
   totalSlots: number;
@@ -487,7 +488,7 @@ function BracketGrid({
   structure, resolved, picks, results = {}, showResults = false, readOnly = false, onChoose,
 }: {
   structure: BracketStructure;
-  resolved: Map<string, { a: string | null; b: string | null }>;
+  resolved: Map<string, ResolvedSlot>;
   picks: BracketPicks;
   results?: BracketResults;
   showResults?: boolean;
@@ -533,7 +534,7 @@ function BracketColumn({
 }: {
   stage: KnockoutStage;
   structure: BracketStructure;
-  resolved: Map<string, { a: string | null; b: string | null }>;
+  resolved: Map<string, ResolvedSlot>;
   picks: BracketPicks;
   results: BracketResults;
   showResults: boolean;
@@ -588,14 +589,14 @@ function MatchupCard({
   slotId, comp, pick, realWinner, showResults, readOnly, onChoose,
 }: {
   slotId: string;
-  comp: { a: string | null; b: string | null } | undefined;
+  comp: ResolvedSlot | undefined;
   pick: string | undefined;
   realWinner: string | undefined;
   showResults: boolean;
   readOnly: boolean;
   onChoose: (slotId: string, team: string) => void;
 }) {
-  const ready = slotIsReady(comp);
+  const pickable = comp?.pickable ?? false;
   const aPicked = !!pick && pick === comp?.a;
   const bPicked = !!pick && pick === comp?.b;
   const hasPick = aPicked || bPicked;
@@ -604,19 +605,19 @@ function MatchupCard({
     <div
       className={[
         'overflow-hidden rounded-[2px] border bg-paper transition',
-        ready ? 'border-pitch-300' : 'border-pitch-200/50 opacity-50',
+        pickable ? 'border-pitch-300' : 'border-pitch-200/50 opacity-50',
       ].join(' ')}
     >
       <TeamButton
         slotId={slotId} team={comp?.a ?? null} picked={aPicked}
         otherPicked={hasPick && !aPicked} realWinner={realWinner}
-        showResults={showResults} readOnly={readOnly} disabled={!ready} onChoose={onChoose}
+        showResults={showResults} readOnly={readOnly} disabled={!pickable} onChoose={onChoose}
       />
       <div className="h-px bg-pitch-200" />
       <TeamButton
         slotId={slotId} team={comp?.b ?? null} picked={bPicked}
         otherPicked={hasPick && !bPicked} realWinner={realWinner}
-        showResults={showResults} readOnly={readOnly} disabled={!ready} onChoose={onChoose}
+        showResults={showResults} readOnly={readOnly} disabled={!pickable} onChoose={onChoose}
       />
     </div>
   );
