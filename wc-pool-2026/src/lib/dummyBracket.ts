@@ -38,30 +38,50 @@ export function buildDummyBracket(teams: string[] = DUMMY_TEAMS_32): BracketStru
       seedB: teams[i * 2 + 1] ?? null,
     });
   }
-  // R16 — 8 slots, matches 89..96
-  for (let i = 0; i < 8; i++) {
+  // R16 — 8 slots, matches 89..96. The official schedule pairs R32 winners
+  // irregularly (not simply "73+74, 75+76, …") — these feedsFrom come
+  // straight from the published match list (Match 89 = "Match 74 winner
+  // vs Match 77 winner", etc).
+  const R16_FEEDS: [string, string][] = [
+    ['R32-2', 'R32-5'],   // M89: M74 winner vs M77 winner
+    ['R32-1', 'R32-3'],   // M90: M73 winner vs M75 winner
+    ['R32-4', 'R32-6'],   // M91: M76 winner vs M78 winner
+    ['R32-7', 'R32-8'],   // M92: M79 winner vs M80 winner
+    ['R32-11', 'R32-12'], // M93: M83 winner vs M84 winner
+    ['R32-9', 'R32-10'],  // M94: M81 winner vs M82 winner
+    ['R32-14', 'R32-16'], // M95: M86 winner vs M88 winner
+    ['R32-13', 'R32-15'], // M96: M85 winner vs M87 winner
+  ];
+  R16_FEEDS.forEach((feedsFrom, i) => {
     slots.push({
       id: `R16-${i + 1}`, stage: 'R16', matchNumber: 89 + i,
-      feedsFrom: [`R32-${i * 2 + 1}`, `R32-${i * 2 + 2}`],
-      seedA: null, seedB: null,
+      feedsFrom, seedA: null, seedB: null,
     });
-  }
+  });
   // QF — 4 slots, matches 97..100
-  for (let i = 0; i < 4; i++) {
+  const QF_FEEDS: [string, string][] = [
+    ['R16-1', 'R16-2'], // M97: M89 winner vs M90 winner
+    ['R16-5', 'R16-6'], // M98: M93 winner vs M94 winner
+    ['R16-3', 'R16-4'], // M99: M91 winner vs M92 winner
+    ['R16-7', 'R16-8'], // M100: M95 winner vs M96 winner
+  ];
+  QF_FEEDS.forEach((feedsFrom, i) => {
     slots.push({
       id: `QF-${i + 1}`, stage: 'QF', matchNumber: 97 + i,
-      feedsFrom: [`R16-${i * 2 + 1}`, `R16-${i * 2 + 2}`],
-      seedA: null, seedB: null,
+      feedsFrom, seedA: null, seedB: null,
     });
-  }
+  });
   // SF — 2 slots, matches 101..102
-  for (let i = 0; i < 2; i++) {
+  const SF_FEEDS: [string, string][] = [
+    ['QF-1', 'QF-2'], // M101: M97 winner vs M98 winner
+    ['QF-3', 'QF-4'], // M102: M99 winner vs M100 winner
+  ];
+  SF_FEEDS.forEach((feedsFrom, i) => {
     slots.push({
       id: `SF-${i + 1}`, stage: 'SF', matchNumber: 101 + i,
-      feedsFrom: [`QF-${i * 2 + 1}`, `QF-${i * 2 + 2}`],
-      seedA: null, seedB: null,
+      feedsFrom, seedA: null, seedB: null,
     });
-  }
+  });
   // 3rd place — match 103, fed by the LOSERS of SF-1 and SF-2
   slots.push({
     id: '3rd', stage: '3rd', matchNumber: 103,

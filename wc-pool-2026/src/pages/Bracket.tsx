@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   cascade, scoreBracket, STAGE_ORDER, STAGE_LABEL, maxKnockoutScore,
+  displayOrder,
   type BracketPicks, type BracketResults, type BracketStructure, type KnockoutStage,
   type ResolvedSlot,
 } from '../lib/bracket';
@@ -495,6 +496,7 @@ function BracketGrid({
   readOnly?: boolean;
   onChoose: (slotId: string, team: string) => void;
 }) {
+  const order = useMemo(() => displayOrder(structure), [structure]);
   return (
     <div className="overflow-x-auto pb-4">
       <div className="flex min-w-[900px] gap-6">
@@ -503,6 +505,7 @@ function BracketGrid({
             key={stage}
             stage={stage}
             structure={structure}
+            slotOrder={order.get(stage) ?? []}
             resolved={resolved}
             picks={picks}
             results={results}
@@ -530,10 +533,11 @@ function PreviewNotice() {
 // ─────────────────────────────────────────────────────────────────────
 
 function BracketColumn({
-  stage, structure, resolved, picks, results, showResults, readOnly, onChoose, thirdPlace,
+  stage, structure, slotOrder, resolved, picks, results, showResults, readOnly, onChoose, thirdPlace,
 }: {
   stage: KnockoutStage;
   structure: BracketStructure;
+  slotOrder: string[];
   resolved: Map<string, ResolvedSlot>;
   picks: BracketPicks;
   results: BracketResults;
@@ -542,7 +546,10 @@ function BracketColumn({
   onChoose: (slotId: string, team: string) => void;
   thirdPlace: boolean;
 }) {
-  const slots = structure.slots.filter((s) => s.stage === stage);
+  // Use tree-walk order so adjacent matches feed the same next-round match.
+  const slots = slotOrder
+    .map((id) => structure.byId.get(id))
+    .filter((s): s is NonNullable<typeof s> => !!s);
   const thirdSlot = thirdPlace ? structure.slots.find((s) => s.stage === '3rd') : undefined;
 
   return (

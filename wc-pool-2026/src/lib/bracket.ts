@@ -213,3 +213,34 @@ export function scoreBracket(
 export function maxKnockoutScore(structure: BracketStructure): number {
   return structure.slots.length * POINTS_PER_PICK;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// DISPLAY ORDER — tree-walk so visually adjacent matches feed each other.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute the correct visual display order for each stage column by walking
+ * the bracket tree from the Final backward. Adjacent matches in each column
+ * are guaranteed to feed the same match in the next column — critical for
+ * the FIFA 2026 bracket where feedsFrom is not a simple binary tree.
+ */
+export function displayOrder(structure: BracketStructure): Map<KnockoutStage, string[]> {
+  function collect(rootId: string, targetStage: KnockoutStage, out: string[]): void {
+    const slot = structure.byId.get(rootId);
+    if (!slot) return;
+    if (slot.stage === targetStage) { out.push(slot.id); return; }
+    const [fA, fB] = slot.feedsFrom;
+    if (fA) collect(fA, targetStage, out);
+    if (fB) collect(fB, targetStage, out);
+  }
+
+  const result = new Map<KnockoutStage, string[]>();
+  for (const stage of ['R32', 'R16', 'QF', 'SF'] as KnockoutStage[]) {
+    const order: string[] = [];
+    collect('Final', stage, order);
+    result.set(stage, order);
+  }
+  result.set('Final', ['Final']);
+  result.set('3rd', ['3rd']);
+  return result;
+}
