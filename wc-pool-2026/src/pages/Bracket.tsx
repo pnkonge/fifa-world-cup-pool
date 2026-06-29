@@ -21,9 +21,7 @@ const EMAIL_KEY = 'wc2026.bracket.email';
 
 type Identity = { email: string; playerName: string };
 
-// STEP 5 SEAM: real knockout results (from the Results tab CSV) populate this.
-// While empty, the reveal shows picks read-only with no scoring tints.
-const REVEAL_RESULTS: BracketResults = {};
+// Real knockout results are fetched from the Results tab via getResults.
 
 export function Bracket() {
   // Real knockout teams from Config!J6:J37 (via the web app). They come back
@@ -397,6 +395,7 @@ function Countdown({ lockMs, now }: { lockMs: number; now: number }) {
 
 function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: number }) {
   const [brackets, setBrackets] = useState<{ playerName: string; picks: BracketPicks }[] | null>(null);
+  const [results, setResults] = useState<BracketResults>({});
   const [sel, setSel] = useState(0);
   const [err, setErr] = useState('');
 
@@ -408,15 +407,29 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
     }).catch(() => setErr('Could not load brackets. Refresh to try again.'));
   }, []);
 
-  const hasResults = Object.keys(REVEAL_RESULTS).length > 0;
+  // Fetch real knockout results and auto-refresh every 2 minutes
+  // so scores update live as matches finish.
+  useEffect(() => {
+    if (!API_CONFIGURED) return;
+    function fetchResults() {
+      bracketApi.getResults().then((r) => {
+        if (r.ok) setResults(r.results);
+      }).catch(() => {});
+    }
+    fetchResults();
+    const id = setInterval(fetchResults, 2 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const hasResults = Object.keys(results).length > 0;
   const current = brackets?.[sel];
   const resolved = useMemo(
     () => (current ? cascade(structure, current.picks) : new Map()),
     [structure, current],
   );
   const score = useMemo(
-    () => (current ? scoreBracket(structure, current.picks, REVEAL_RESULTS) : null),
-    [structure, current],
+    () => (current ? scoreBracket(structure, current.picks, results) : null),
+    [structure, current, results],
   );
 
   return (
@@ -467,7 +480,7 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
           {current && (
             <BracketGrid
               structure={structure} resolved={resolved} picks={current.picks}
-              results={REVEAL_RESULTS} showResults={hasResults} readOnly
+              results={results} showResults={hasResults} readOnly
               onChoose={() => {}}
             />
           )}
