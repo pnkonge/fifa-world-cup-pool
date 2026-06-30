@@ -8,6 +8,9 @@
 
 import Papa from 'papaparse';
 import { getMockSnapshot } from './mockData';
+import { cascade, type BracketStructure } from './bracket';
+import { buildDummyBracket } from './dummyBracket';
+import { API_CONFIGURED, bracketApi } from './bracketApi';
 import type {
   DataSnapshot, GroupStanding, Match, MatchResult, Outcome,
   PlayerScore, PlayerPicks, PredictionsData, Stage,
@@ -456,6 +459,38 @@ function parsePredictionsGroupCsv(rows: string[][]): PredictionsData {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Knockout team resolution — the Schedule sheet's KO rows (matches
+// 73-104) only ever carry whatever placeholder label is typed into them
+// ("Group A 2nd", "Match 74 winner"); the real team names live behind
+// the Bracket backend (Config!J6:J37 + live results), resolved the same
+// way the Bracket page resolves them. We mirror that here so Schedule
+// and MyPicks show real names too, falling back to "TBD" per side until
+// the backend can resolve it.
+// ─────────────────────────────────────────────────────────────────────
+
+async function resolveKnockoutTeams(): Promise<Map<number, [string, string]> | null> {
+  if (!API_CONFIGURED) return null;
+  try {
+    const [teamsRes, resultsRes] = await Promise.all([
+      bracketApi.getTeams(),
+      bracketApi.getResults(),
+    ]);
+    if (!teamsRes.ok) return null;
+    const structure: BracketStructure = buildDummyBracket(teamsRes.teams);
+    const resolved = cascade(structure, resultsRes.ok ? resultsRes.results : {});
+    const byMatchNumber = new Map<number, [string, string]>();
+    for (const slot of structure.slots) {
+      const comp = resolved.get(slot.id);
+      byMatchNumber.set(slot.matchNumber, [comp?.a || 'TBD', comp?.b || 'TBD']);
+    }
+    return byMatchNumber;
+  } catch (e) {
+    console.error('[sheets] Knockout team resolution failed:', e);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────
 
@@ -469,6 +504,9 @@ export async function loadSnapshot(): Promise<DataSnapshot> {
   }
 
   const snapshot: DataSnapshot = { ...mock, fetchedAt: new Date() };
+
+  // Kicked off now so it resolves concurrently with the CSV fetches below.
+  const koTeamsPromise = resolveKnockoutTeams();
 
   // Run independent fetches in parallel.
   const tasks: Promise<void>[] = [];
@@ -538,6 +576,16 @@ export async function loadSnapshot(): Promise<DataSnapshot> {
   }
 
   await Promise.all(tasks);
+
+  // Overlay real KO team names (or "TBD" until resolved) over whatever
+  // placeholder label the Schedule sheet has for matches 73-104.
+  const koTeams = await koTeamsPromise;
+  if (koTeams) {
+    for (const m of snapshot.matches) {
+      const sides = koTeams.get(m.number);
+      if (sides) { m.teamA = sides[0]; m.teamB = sides[1]; }
+    }
+  }
 
   // Sanity gate: KO matches that still have placeholder team names
   // ("M73 winner", "1st Group A", "TBD", etc.) can't actually be played

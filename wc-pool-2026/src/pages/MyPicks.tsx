@@ -1,8 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import type {
   Match, MatchResult, PlayerScore, PredictionsData,
 } from '../lib/types';
+import { bracketApi, API_CONFIGURED } from '../lib/bracketApi';
+
+// Slot ID -> match number mapping (R32-1=73, R32-2=74, ..., Final=104)
+const SLOT_IDS: string[] = [];
+for (let i = 1; i <= 16; i++) SLOT_IDS.push(`R32-${i}`);
+for (let i = 1; i <= 8; i++) SLOT_IDS.push(`R16-${i}`);
+for (let i = 1; i <= 4; i++) SLOT_IDS.push(`QF-${i}`);
+for (let i = 1; i <= 2; i++) SLOT_IDS.push(`SF-${i}`);
+SLOT_IDS.push('3rd', 'Final');
+
+function slotToMatchNum(slotId: string): number | null {
+  const idx = SLOT_IDS.indexOf(slotId);
+  return idx >= 0 ? 73 + idx : null;
+}
 
 interface MyPicksProps {
   players: PlayerScore[];
@@ -15,23 +29,84 @@ type TimeFilter = 'all' | 'played' | 'upcoming';
 type StageFilter = 'all' | 'group' | 'knockouts';
 
 export function MyPicks({ players, matches, results, predictions }: MyPicksProps) {
+  // Fetch knockout brackets (public after lock) and merge into predictions
+  const [koPredictions, setKoPredictions] = useState<PredictionsData | null>(null);
+
+  useEffect(() => {
+    if (!API_CONFIGURED) return;
+    bracketApi.getAllBrackets().then((r) => {
+      if (!r.ok || !r.locked || !r.brackets.length) return;
+
+      const byPlayer = new Map<string, { name: string; picks: Map<number, string> }>();
+      const consensus = new Map<number, Map<string, number>>();
+
+      for (const b of r.brackets) {
+        const playerPicks = new Map<number, string>();
+        for (const [slotId, team] of Object.entries(b.picks)) {
+          const matchNum = slotToMatchNum(slotId);
+          if (matchNum == null || !team) continue;
+          const pickValue = team + ' Win'; // match group stage format
+          playerPicks.set(matchNum, pickValue);
+
+          // Build consensus
+          if (!consensus.has(matchNum)) consensus.set(matchNum, new Map());
+          const votes = consensus.get(matchNum)!;
+          votes.set(pickValue, (votes.get(pickValue) ?? 0) + 1);
+        }
+        byPlayer.set(b.playerName.toLowerCase(), { name: b.playerName, picks: playerPicks });
+      }
+
+      setKoPredictions({ byPlayer, consensus, totalPlayers: r.brackets.length });
+    }).catch(() => {});
+  }, []);
+
+  // Merge group predictions with knockout predictions
+  const mergedPredictions = useMemo((): PredictionsData => {
+    if (!koPredictions) return predictions;
+
+    const byPlayer = new Map(predictions.byPlayer);
+    for (const [key, koPlayer] of koPredictions.byPlayer) {
+      const existing = byPlayer.get(key);
+      if (existing) {
+        // Merge picks: knockout picks added to existing group picks
+        const merged = new Map(existing.picks);
+        for (const [matchNum, pick] of koPlayer.picks) {
+          merged.set(matchNum, pick);
+        }
+        byPlayer.set(key, { name: existing.name, picks: merged });
+      } else {
+        byPlayer.set(key, koPlayer);
+      }
+    }
+
+    const consensus = new Map(predictions.consensus);
+    for (const [matchNum, votes] of koPredictions.consensus) {
+      consensus.set(matchNum, votes);
+    }
+
+    return {
+      byPlayer,
+      consensus,
+      totalPlayers: Math.max(predictions.totalPlayers, koPredictions.totalPlayers),
+    };
+  }, [predictions, koPredictions]);
   const names = useMemo(() => {
     const set = new Map<string, string>();
-    for (const p of predictions.byPlayer.values()) {
+    for (const p of mergedPredictions.byPlayer.values()) {
       set.set(p.name.toLowerCase(), p.name);
     }
     if (set.size === 0) {
       for (const p of players) set.set(p.name.toLowerCase(), p.name);
     }
     return [...set.values()].sort((a, b) => a.localeCompare(b));
-  }, [predictions, players]);
+  }, [mergedPredictions, players]);
 
   const [selected, setSelected] = useState<string>(names[0] ?? '');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [groupFilter, setGroupFilter] = useState<string>('all');
 
-  if (predictions.totalPlayers === 0) {
+  if (mergedPredictions.totalPlayers === 0) {
     return (
       <div className="border border-pitch-300 bg-paper p-8 sm:p-12">
         <p className="font-mono text-[10px] uppercase tracking-widest text-pitch-700">
@@ -47,7 +122,7 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
     );
   }
 
-  const playerPicks = predictions.byPlayer.get(selected.toLowerCase());
+  const playerPicks = mergedPredictions.byPlayer.get(selected.toLowerCase());
   const resultMap = useMemo(
     () => new Map(results.map((r) => [r.matchNumber, r])),
     [results],
@@ -66,8 +141,9 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
       if (groupFilter !== 'all' && m.group !== groupFilter) return false;
       if (timeFilter !== 'all') {
         const r = resultMap.get(m.number);
-        if (timeFilter === 'played' && !r?.played) return false;
-        if (timeFilter === 'upcoming' && r?.played) return false;
+        const rp = !!r?.played && !isUnresolvedTeam(m.teamA) && !isUnresolvedTeam(m.teamB);
+        if (timeFilter === 'played' && !rp) return false;
+        if (timeFilter === 'upcoming' && rp) return false;
       }
       return true;
     });
@@ -101,7 +177,7 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
       const pick = playerPicks.picks.get(m.number);
       if (!pick) continue;
       const r = resultMap.get(m.number);
-      if (!r?.played) { pending++; continue; }
+      if (!r?.played || isUnresolvedTeam(m.teamA) || isUnresolvedTeam(m.teamB)) { pending++; continue; }
       const norm = normalizePick(pick, m);
       if (r.outcome && norm === r.outcome) correct++;
       else wrong++;
@@ -203,8 +279,8 @@ export function MyPicks({ players, matches, results, predictions }: MyPicksProps
             matches={section.matches}
             resultMap={resultMap}
             playerPicks={playerPicks}
-            consensus={predictions.consensus}
-            totalPlayers={predictions.totalPlayers}
+            consensus={mergedPredictions.consensus}
+            totalPlayers={mergedPredictions.totalPlayers}
           />
         ))
       )}
@@ -263,12 +339,19 @@ function MatchPicksRow({
   consensus?: Map<string, number>;
   totalPlayers: number;
 }) {
-  const played = !!result?.played;
+  const played = !!result?.played
+    && !isUnresolvedTeam(match.teamA)
+    && !isUnresolvedTeam(match.teamB);
+  const showScore = played && result?.scoreA != null && result?.scoreB != null;
   const myPickLabel = pickToLabel(myPick, match);
   const actualOutcome = result?.outcome;
   const normalizedPick = normalizePick(myPick, match);
   const myPickCorrect = played && !!normalizedPick && !!actualOutcome && normalizedPick === actualOutcome;
-  const myPickWrong = played && !!normalizedPick && !!actualOutcome && normalizedPick !== actualOutcome;
+  // Wrong if: pick doesn't match the winner, OR picked team didn't even make it to this match
+  const myPickWrong = played && !!myPick && (
+    (!!normalizedPick && !!actualOutcome && normalizedPick !== actualOutcome) ||
+    (!normalizedPick && match.stage !== 'Group')
+  );
 
   const cardBase = 'p-4 transition';
   const cardTint =
@@ -316,11 +399,11 @@ function MatchPicksRow({
           <p
             className={[
               'whitespace-nowrap font-mono text-base tabular sm:text-lg',
-              played ? 'font-semibold text-pitch-950' : 'text-pitch-300',
+              showScore ? 'font-semibold text-pitch-950' : 'text-pitch-300',
             ].join(' ')}
           >
-            {played && result.scoreA != null && result.scoreB != null
-              ? `${result.scoreA}–${result.scoreB}`
+            {showScore
+              ? `${result!.scoreA}–${result!.scoreB}`
               : '—'}
           </p>
         </div>
@@ -434,4 +517,15 @@ function pickToLabel(pick: string | undefined, match: Match): string {
   if (norm === 'D') return 'Draw';
   // Unknown format — display cleaned-up raw value.
   return pick.replace(/\s+win$/i, '').trim();
+}
+
+/**
+ * True if a "team" is still an unresolved slot label (e.g. "Group A 2nd",
+ * "Match 73 winner", "TBD") rather than a real team. Requires a digit before
+ * the ordinal so countries like Netherlands/England/Jordan are never flagged.
+ */
+function isUnresolvedTeam(name: string): boolean {
+  return /\b(winner|loser|tbd)\b/i.test(name)
+      || /\d(?:st|nd|rd|th)\b/i.test(name)
+      || /^M\d+\b/i.test(name);
 }
