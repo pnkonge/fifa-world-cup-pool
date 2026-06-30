@@ -396,7 +396,7 @@ function Countdown({ lockMs, now }: { lockMs: number; now: number }) {
 function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: number }) {
   const [brackets, setBrackets] = useState<{ playerName: string; picks: BracketPicks }[] | null>(null);
   const [results, setResults] = useState<BracketResults>({});
-  const [sel, setSel] = useState(0);
+  const [sel, setSel] = useState(-1); // -1 = live bracket, 0+ = player index
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -408,7 +408,6 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
   }, []);
 
   // Fetch real knockout results and auto-refresh every 2 minutes
-  // so scores update live as matches finish.
   useEffect(() => {
     if (!API_CONFIGURED) return;
     function fetchResults() {
@@ -422,10 +421,15 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
   }, []);
 
   const hasResults = Object.keys(results).length > 0;
-  const current = brackets?.[sel];
+  const isLive = sel === -1;
+  const current = isLive ? null : brackets?.[sel];
+
+  // Live bracket: real results used as picks, so winners cascade through
+  const displayPicks = isLive ? results : (current?.picks ?? {});
+
   const resolved = useMemo(
-    () => (current ? cascade(structure, current.picks) : new Map()),
-    [structure, current],
+    () => cascade(structure, displayPicks),
+    [structure, displayPicks],
   );
   const score = useMemo(
     () => (current ? scoreBracket(structure, current.picks, results) : null),
@@ -445,13 +449,25 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
       {brackets && brackets.length > 0 && (
         <>
           <div className="flex flex-wrap gap-2 border-y border-pitch-300/40 py-3">
+            <button
+              onClick={() => setSel(-1)}
+              className={[
+                'border px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest transition',
+                isLive
+                  ? 'border-gold-600 bg-gold-400 text-pitch-950'
+                  : 'border-pitch-300 text-pitch-700 hover:border-gold-600 hover:text-pitch-950',
+              ].join(' ')}
+            >
+              Live Bracket
+            </button>
+            <div className="mx-1 w-px bg-pitch-300/60" />
             {brackets.map((b, i) => (
               <button
                 key={b.playerName + i}
                 onClick={() => setSel(i)}
                 className={[
                   'border px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest transition',
-                  i === sel
+                  !isLive && i === sel
                     ? 'border-pitch-950 bg-pitch-950 text-paper'
                     : 'border-pitch-300 text-pitch-700 hover:border-pitch-950 hover:text-pitch-950',
                 ].join(' ')}
@@ -461,7 +477,8 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
             ))}
           </div>
 
-          {hasResults && score && (
+          {/* Scoring bar — only for player brackets, not live */}
+          {!isLive && hasResults && score && (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border border-pitch-300/60 bg-paper p-4">
               <div className="flex items-baseline gap-2">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-pitch-700">Knockout score</span>
@@ -477,13 +494,12 @@ function Reveal({ structure, lockMs }: { structure: BracketStructure; lockMs: nu
             </div>
           )}
 
-          {current && (
-            <BracketGrid
-              structure={structure} resolved={resolved} picks={current.picks}
-              results={results} showResults={hasResults} readOnly
-              onChoose={() => {}}
-            />
-          )}
+          <BracketGrid
+            structure={structure} resolved={resolved} picks={displayPicks}
+            results={isLive ? {} : results}
+            showResults={!isLive && hasResults} readOnly
+            onChoose={() => {}}
+          />
         </>
       )}
 
