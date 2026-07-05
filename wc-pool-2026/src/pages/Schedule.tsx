@@ -180,6 +180,7 @@ function MatchRow({ match, result }: { match: Match; result?: MatchResult }) {
     result.scoreB != null &&
     !isUnresolvedTeam(match.teamA) &&
     !isUnresolvedTeam(match.teamB);
+  const pens = showScore && result?.decidedByPenalties;
   return (
     <article className="grid grid-cols-[3.5rem_1fr_auto] items-baseline gap-x-3 border-b border-pitch-300/30 py-3 sm:gap-x-5">
       <span className="font-mono text-xs tabular text-pitch-700">
@@ -188,9 +189,9 @@ function MatchRow({ match, result }: { match: Match; result?: MatchResult }) {
 
       <div className="min-w-0">
         <p className="font-display text-base text-pitch-950 sm:text-lg">
-          <TeamName name={match.teamA} />
+          <TeamName name={match.teamA} won={pens && result?.outcome === 'A'} />
           <span className="mx-2 font-sans text-sm font-normal text-pitch-500">vs</span>
-          <TeamName name={match.teamB} />
+          <TeamName name={match.teamB} won={pens && result?.outcome === 'B'} />
         </p>
         <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-pitch-700">
           {match.stage === 'Group' ? `Group ${match.group}` : stageLabel(match.stage)}
@@ -208,12 +209,17 @@ function MatchRow({ match, result }: { match: Match; result?: MatchResult }) {
         ].join(' ')}
       >
         {showScore ? `${result!.scoreA}–${result!.scoreB}` : '—'}
+        {pens && (
+          <span className="ml-1.5 font-sans text-[10px] font-normal uppercase tracking-wide text-pitch-500">
+            pens
+          </span>
+        )}
       </span>
     </article>
   );
 }
 
-function TeamName({ name }: { name: string }) {
+function TeamName({ name, won }: { name: string; won?: boolean }) {
   // Slot labels (e.g. "M73 winner", "1st Group A") rendered in italic mono
   // to signal they're placeholders not yet resolved.
   // Match real placeholder formats only — must start with digit(s) followed by
@@ -229,7 +235,7 @@ function TeamName({ name }: { name: string }) {
       <span className="font-mono text-sm italic text-pitch-600">{name}</span>
     );
   }
-  return <span className="font-medium">{name}</span>;
+  return <span className={won ? 'font-bold' : 'font-medium'}>{name}</span>;
 }
 
 function stageLabel(stage: string): string {
