@@ -468,7 +468,15 @@ function parsePredictionsGroupCsv(rows: string[][]): PredictionsData {
 // the backend can resolve it.
 // ─────────────────────────────────────────────────────────────────────
 
-async function resolveKnockoutTeams(): Promise<Map<number, [string, string]> | null> {
+/** A resolved KO match: its two competitors plus the real advancing team
+ *  (from the bracket results), which is the source of truth for who won —
+ *  including penalty shootouts, where the scoreboard is tied. */
+interface KoResolution {
+  teams: [string, string];
+  winner: string | null;
+}
+
+async function resolveKnockoutTeams(): Promise<Map<number, KoResolution> | null> {
   if (!API_CONFIGURED) return null;
   try {
     const [teamsRes, resultsRes] = await Promise.all([
@@ -477,11 +485,15 @@ async function resolveKnockoutTeams(): Promise<Map<number, [string, string]> | n
     ]);
     if (!teamsRes.ok) return null;
     const structure: BracketStructure = buildDummyBracket(teamsRes.teams);
-    const resolved = cascade(structure, resultsRes.ok ? resultsRes.results : {});
-    const byMatchNumber = new Map<number, [string, string]>();
+    const realResults = resultsRes.ok ? resultsRes.results : {};
+    const resolved = cascade(structure, realResults);
+    const byMatchNumber = new Map<number, KoResolution>();
     for (const slot of structure.slots) {
       const comp = resolved.get(slot.id);
-      byMatchNumber.set(slot.matchNumber, [comp?.a || 'TBD', comp?.b || 'TBD']);
+      byMatchNumber.set(slot.matchNumber, {
+        teams: [comp?.a || 'TBD', comp?.b || 'TBD'],
+        winner: realResults[slot.id] ?? null,
+      });
     }
     return byMatchNumber;
   } catch (e) {
@@ -581,9 +593,31 @@ export async function loadSnapshot(): Promise<DataSnapshot> {
   // placeholder label the Schedule sheet has for matches 73-104.
   const koTeams = await koTeamsPromise;
   if (koTeams) {
+    const resultByNum = new Map(snapshot.results.map((r) => [r.matchNumber, r]));
     for (const m of snapshot.matches) {
-      const sides = koTeams.get(m.number);
-      if (sides) { m.teamA = sides[0]; m.teamB = sides[1]; }
+      const ko = koTeams.get(m.number);
+      if (!ko) continue;
+      m.teamA = ko.teams[0];
+      m.teamB = ko.teams[1];
+
+      // A knockout can't end in a draw — someone always advances. When the
+      // scoreboard is level the match went to penalties, so the true winner
+      // comes from the bracket results, not the (tied) score. Without this,
+      // penalty wins were inferred as draws in MyPicks and the Schedule.
+      const r = resultByNum.get(m.number);
+      if (ko.winner && r?.played) {
+        const w = ko.winner.trim().toLowerCase();
+        const side: Outcome =
+          w === m.teamA.trim().toLowerCase() ? 'A'
+            : w === m.teamB.trim().toLowerCase() ? 'B'
+              : null;
+        if (side) {
+          if (r.scoreA != null && r.scoreB != null && r.scoreA === r.scoreB) {
+            r.decidedByPenalties = true;
+          }
+          r.outcome = side;
+        }
+      }
     }
   }
 

@@ -29,6 +29,9 @@ export interface MatchResult {
   scoreB: number | null;
   outcome: Outcome;
   played: boolean;
+  /** KO match that ended level and was decided on penalties (score is tied
+   *  but `outcome` names the shootout winner). Group matches are never set. */
+  decidedByPenalties?: boolean;
 }
 
 export interface PlayerScore {
