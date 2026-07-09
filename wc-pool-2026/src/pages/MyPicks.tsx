@@ -405,6 +405,11 @@ function MatchPicksRow({
             {showScore
               ? `${result!.scoreA}–${result!.scoreB}`
               : '—'}
+            {showScore && result?.decidedByPenalties && (
+              <span className="ml-1.5 font-sans text-[10px] font-normal uppercase tracking-wide text-pitch-500">
+                pens
+              </span>
+            )}
           </p>
         </div>
       </header>
