@@ -1,10 +1,13 @@
 import type { PlayerScore } from '../lib/types';
+import { ChampionsBanner } from '../components/ChampionsBanner';
 
 interface LeaderboardProps {
   players: PlayerScore[];
+  /** Set once the Final has a result — turns on the champions treatment. */
+  championTeam?: string | null;
 }
 
-export function Leaderboard({ players }: LeaderboardProps) {
+export function Leaderboard({ players, championTeam = null }: LeaderboardProps) {
   if (!players.length) {
     return <p className="font-mono text-sm text-pitch-700">No standings yet.</p>;
   }
@@ -12,9 +15,14 @@ export function Leaderboard({ players }: LeaderboardProps) {
   const leader = players[0];
   const podium = players.slice(0, 3);
   const pack = players.slice(3);
+  const complete = Boolean(championTeam);
 
   return (
     <div className="space-y-12">
+      {complete && (
+        <ChampionsBanner championTeam={championTeam!} poolChampion={leader} />
+      )}
+
       {/* Section header */}
       <div className="border-b-2 border-pitch-950 pb-4">
         <p className="font-mono text-[10px] uppercase tracking-widest text-pitch-700">
@@ -28,14 +36,16 @@ export function Leaderboard({ players }: LeaderboardProps) {
           <span className="not-italic font-semibold text-pitch-950">
             {leader.grandTotal} points
           </span>
-          . Knockouts haven't started — everything is still to play for.
+          {complete
+            ? ' — final. The pool is decided.'
+            : ". It isn't over until the final whistle."}
         </p>
       </div>
 
       {/* Podium */}
       <section className="grid gap-4 sm:grid-cols-3">
         {podium.map((p, i) => (
-          <PodiumCard key={p.name} player={p} place={i + 1} />
+          <PodiumCard key={p.name} player={p} place={i + 1} complete={complete} />
         ))}
       </section>
 
@@ -108,7 +118,15 @@ export function Leaderboard({ players }: LeaderboardProps) {
   );
 }
 
-function PodiumCard({ player, place }: { player: PlayerScore; place: number }) {
+function PodiumCard({
+  player,
+  place,
+  complete,
+}: {
+  player: PlayerScore;
+  place: number;
+  complete: boolean;
+}) {
   const placement = place === 1 ? '1st' : place === 2 ? '2nd' : '3rd';
   const isLeader = place === 1;
 
@@ -132,7 +150,7 @@ function PodiumCard({ player, place }: { player: PlayerScore; place: number }) {
         </span>
         {isLeader && (
           <span className="font-mono text-[10px] uppercase tracking-widest text-gold-300">
-            ★ Leader
+            {complete ? '🏆 Champion' : '★ Leader'}
           </span>
         )}
       </div>

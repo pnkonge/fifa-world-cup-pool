@@ -8,6 +8,7 @@ import { Schedule } from './pages/Schedule';
 import { Standings } from './pages/Standings';
 import { MyPicks } from './pages/MyPicks';
 import { Bracket } from './pages/Bracket';
+import { WildCards } from './pages/WildCards';
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<DataSnapshot | null>(null);
@@ -31,6 +32,21 @@ export default function App() {
     refresh();
   }, [refresh]);
 
+  // World champions: the Final match with a decisive result. Suppress if the
+  // schedule still shows a slot label ("Match 103 winner") instead of a team.
+  const championTeam = (() => {
+    if (!snapshot) return null;
+    const final = snapshot.matches.find((m) => m.stage === 'Final');
+    if (!final) return null;
+    const res = snapshot.results.find(
+      (r) => r.matchNumber === final.number && r.played,
+    );
+    if (!res || (res.outcome !== 'A' && res.outcome !== 'B')) return null;
+    const team = res.outcome === 'A' ? final.teamA : final.teamB;
+    if (!team || /winner|match\s*\d/i.test(team)) return null;
+    return team;
+  })();
+
   return (
     <Layout
       fetchedAt={snapshot?.fetchedAt ?? null}
@@ -48,7 +64,10 @@ export default function App() {
           path="/"
           element={
             snapshot ? (
-              <Leaderboard players={snapshot.players} />
+              <Leaderboard
+                players={snapshot.players}
+                championTeam={championTeam}
+              />
             ) : (
               <LoadingState />
             )
@@ -75,6 +94,7 @@ export default function App() {
           }
         />
         <Route path="/bracket" element={<Bracket />} />
+        <Route path="/wild-cards" element={<WildCards />} />
         <Route
           path="/my-picks"
           element={
