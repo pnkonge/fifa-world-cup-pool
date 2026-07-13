@@ -121,3 +121,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+wc-pool-2026/apps-script/wildcards.gs
