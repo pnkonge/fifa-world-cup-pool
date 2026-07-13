@@ -12,6 +12,7 @@ const NAV = [
   { to: '/schedule', label: 'Schedule' },
   { to: '/standings', label: 'Standings' },
   { to: '/bracket', label: 'Bracket' },
+  { to: '/wild-cards', label: 'Wild Cards' },
   { to: '/my-picks', label: 'My Picks' },
 ];
 
