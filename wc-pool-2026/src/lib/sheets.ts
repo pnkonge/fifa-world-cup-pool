@@ -156,7 +156,7 @@ function parseScoringCsv(rows: string[][]): PlayerScore[] {
       groupTotal: num(row[SCORING_COLS.groupTotal]),
       knockoutTotal: num(row[SCORING_COLS.knockoutTotal]),
       wildcardTotal: num(row[SCORING_COLS.wildcardTotal]),
-      tiebreakerDelta: num(row[SCORING_COLS.tiebreakerDelta]),
+      tiebreakerDelta: parseNum(row[SCORING_COLS.tiebreakerDelta]),
       grandTotal: num(row[SCORING_COLS.grandTotal]),
       rank: 0,
     });
@@ -173,7 +173,11 @@ function parseScoringCsv(rows: string[][]): PlayerScore[] {
   // Always rank locally — ignore DK because it can be stale.
   players.sort((a, b) => {
     if (b.grandTotal !== a.grandTotal) return b.grandTotal - a.grandTotal;
-    return a.tiebreakerDelta - b.tiebreakerDelta;
+    // No tiebreaker submitted sorts below any submitted delta.
+    return (
+      (a.tiebreakerDelta ?? Number.POSITIVE_INFINITY) -
+      (b.tiebreakerDelta ?? Number.POSITIVE_INFINITY)
+    );
   });
   players.forEach((p, i) => { p.rank = i + 1; });
   return players;
