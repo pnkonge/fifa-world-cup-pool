@@ -39,7 +39,7 @@ export interface PlayerScore {
   groupTotal: number;
   knockoutTotal: number;
   wildcardTotal: number;
-  tiebreakerDelta: number; // smaller is better
+  tiebreakerDelta: number | null; // smaller is better; null when no TB submitted
   grandTotal: number;
   rank: number;
   previousRank?: number; // for trend arrows

@@ -1,5 +1,6 @@
 import type { PlayerScore } from '../lib/types';
 import { ChampionsBanner } from '../components/ChampionsBanner';
+import { PodiumBoxScore } from '../components/PodiumBoxScore';
 
 interface LeaderboardProps {
   players: PlayerScore[];
@@ -101,7 +102,7 @@ export function Leaderboard({ players, championTeam = null }: LeaderboardProps) 
                     {p.wildcardTotal}
                   </td>
                   <td className="hidden py-3 pr-2 text-right font-mono text-sm text-pitch-700 sm:table-cell">
-                    {p.tiebreakerDelta}
+                    {p.tiebreakerDelta ?? '—'}
                   </td>
                   <td className="py-3 pl-2 text-right font-mono text-base font-semibold text-pitch-950">
                     {p.grandTotal}
@@ -182,6 +183,15 @@ function PodiumCard({
           {player.grandTotal}
         </span>
       </div>
+      <PodiumBoxScore
+        group={player.groupTotal}
+        ko={player.knockoutTotal}
+        wild={player.wildcardTotal}
+        tbDelta={player.tiebreakerDelta}
+        total={player.grandTotal}
+        dark={isLeader}
+        defaultOpen={isLeader}
+      />
     </article>
   );
 }
